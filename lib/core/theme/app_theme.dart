@@ -66,6 +66,10 @@ class AppTheme {
           vertical: 14,
         ),
         hintStyle: AppTextStyles.body.copyWith(color: c.textSecondary),
+        labelStyle: AppTextStyles.body.copyWith(color: c.textSecondary),
+        floatingLabelStyle: AppTextStyles.meta.copyWith(color: c.textPrimary),
+        prefixIconColor: c.textSecondary,
+        suffixIconColor: c.textSecondary,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppSpacing.controlRadius),
           borderSide: BorderSide(

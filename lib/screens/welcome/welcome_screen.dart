@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/routing/app_routes.dart';
 import '../../core/routing/page_transitions.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
@@ -8,7 +9,7 @@ import '../../widgets/app_mark.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/staggered_fade_in.dart';
 import '../../widgets/wordmark.dart';
-import '../home/home_screen.dart';
+import '../login/login_screen.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key, this.showsCloseButton = false});
@@ -52,7 +53,12 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       Navigator.of(context).pop();
       return;
     }
-    Navigator.of(context).pushReplacement(fadeRoute(const HomeScreen()));
+    Navigator.of(context).pushReplacement(
+      fadeRoute(
+        const LoginScreen(),
+        settings: const RouteSettings(name: AppRoutes.login),
+      ),
+    );
   }
 
   @override
@@ -84,16 +90,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               const Spacer(flex: 3),
               ScaleTransition(
                 scale: _markScale,
-                child: Container(
-                  width: 96,
-                  height: 96,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: c.accent,
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: AppMark(size: 48, color: c.onAccent),
-                ),
+                child: const AppMark(size: 96),
               ),
               const SizedBox(height: AppSpacing.lg),
               Wordmark(fontSize: 30, color: c.textPrimary),

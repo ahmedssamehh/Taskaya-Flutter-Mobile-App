@@ -1,20 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/routing/app_routes.dart';
 import '../../core/routing/page_transitions.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../data/models/task.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../widgets/app_mark.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/notification_bell.dart';
 import '../../widgets/section_label.dart';
 import '../../widgets/staggered_fade_in.dart';
 import '../../widgets/task_card.dart';
 import '../../widgets/theme_toggle.dart';
 import '../add_edit/add_edit_task_screen.dart';
+import '../login/login_screen.dart';
 import '../welcome/welcome_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -118,6 +122,27 @@ class _HomeScreenState extends State<HomeScreen> {
     ).push(fadeRoute(const WelcomeScreen(showsCloseButton: true)));
   }
 
+  Future<void> _logout() async {
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Log out?',
+      message: 'You can log back in anytime.',
+      confirmLabel: 'Log Out',
+      destructive: false,
+    );
+    if (!confirmed || !mounted) return;
+
+    await context.read<AuthProvider>().logout();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      fadeRoute(
+        const LoginScreen(),
+        settings: const RouteSettings(name: AppRoutes.login),
+      ),
+      (route) => false,
+    );
+  }
+
   Future<bool> _confirmExit() async {
     return showConfirmDialog(
       context,
@@ -170,6 +195,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       pendingCount: tasks.pendingCount,
                       completedCount: tasks.completedCount,
                       onInfo: _openAbout,
+                      onLogout: _logout,
                     ),
                     Expanded(
                       child: EmptyState(onAddTask: () => _openAddEdit()),
@@ -183,6 +209,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         pendingCount: tasks.pendingCount,
                         completedCount: tasks.completedCount,
                         onInfo: _openAbout,
+                        onLogout: _logout,
                       ),
                     ),
                     SliverPadding(
@@ -314,11 +341,13 @@ class _Header extends StatelessWidget {
     required this.pendingCount,
     required this.completedCount,
     required this.onInfo,
+    required this.onLogout,
   });
 
   final int pendingCount;
   final int completedCount;
   final VoidCallback onInfo;
+  final VoidCallback onLogout;
 
   @override
   Widget build(BuildContext context) {
@@ -361,6 +390,7 @@ class _Header extends StatelessWidget {
               ],
             ),
           ),
+          const NotificationBell(),
           const ThemeToggle(),
           Semantics(
             label: 'About Taskaya',
@@ -368,6 +398,14 @@ class _Header extends StatelessWidget {
             child: IconButton(
               onPressed: onInfo,
               icon: Icon(Icons.info_outline, color: c.textPrimary, size: 20),
+            ),
+          ),
+          Semantics(
+            label: 'Log out',
+            button: true,
+            child: IconButton(
+              onPressed: onLogout,
+              icon: Icon(Icons.logout_outlined, color: c.textPrimary, size: 20),
             ),
           ),
         ],

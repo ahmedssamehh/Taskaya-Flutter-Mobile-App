@@ -8,7 +8,7 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/utils/validators.dart';
 import '../../providers/auth_provider.dart';
-import '../../widgets/app_text_field.dart';
+import '../../widgets/app_mark.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/secondary_button.dart';
 import '../home/home_screen.dart';
@@ -26,9 +26,10 @@ class _SignupScreenState extends State<SignupScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
-  final _nameFocus = FocusNode();
-
-  String? _errorMessage;
+  bool _obscurePassword = true;
+  bool _obscureConfirm = true;
+  bool _submitting = false;
+  String? _authError;
 
   @override
   void dispose() {
@@ -36,169 +37,202 @@ class _SignupScreenState extends State<SignupScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmController.dispose();
-    _nameFocus.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
-    setState(() => _errorMessage = null);
-    final valid = _formKey.currentState?.validate() ?? false;
-    if (!valid) {
-      _nameFocus.requestFocus();
-      return;
-    }
+    setState(() => _authError = null);
+    if (!(_formKey.currentState?.validate() ?? false)) return;
 
-    final auth = context.read<AuthProvider>();
-    final error = await auth.signup(
-      _nameController.text,
-      _emailController.text,
-      _passwordController.text,
-    );
-
+    setState(() => _submitting = true);
+    final error = await context.read<AuthProvider>().signup(
+          _nameController.text,
+          _emailController.text,
+          _passwordController.text,
+        );
     if (!mounted) return;
+    setState(() => _submitting = false);
+
     if (error != null) {
-      setState(() => _errorMessage = error);
+      setState(() => _authError = error);
       return;
     }
-
-    Navigator.of(context).pushReplacement(
+    Navigator.of(context).pushAndRemoveUntil(
       fadeRoute(
         const HomeScreen(),
         settings: const RouteSettings(name: AppRoutes.home),
       ),
+      (route) => false,
     );
   }
+
+  void _goToLogin() => Navigator.of(context).pop();
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final auth = context.watch<AuthProvider>();
 
     return Scaffold(
       backgroundColor: c.background,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.screenPaddingH,
-          ),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: AppSpacing.md),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Semantics(
-                    button: true,
-                    label: 'Back',
-                    child: IconButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: Icon(Icons.arrow_back, color: c.textPrimary),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  'Create account',
-                  style: AppTextStyles.titleLarge.copyWith(
-                    color: c.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  'Start organising today.',
-                  style: AppTextStyles.body.copyWith(color: c.textSecondary),
-                ),
-                const SizedBox(height: AppSpacing.xl),
-                if (_errorMessage != null) ...[
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.md,
-                      vertical: AppSpacing.sm2,
-                    ),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: c.error, width: 1),
-                      borderRadius: BorderRadius.circular(
-                        AppSpacing.controlRadius,
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.xl,
+            ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Center(child: AppMark(size: 64)),
+                    const SizedBox(height: AppSpacing.lg),
+                    Text(
+                      'Create account',
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.titleLarge.copyWith(
+                        color: c.textPrimary,
                       ),
                     ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.error_outline, color: c.error, size: 18),
-                        const SizedBox(width: AppSpacing.sm),
-                        Expanded(
-                          child: Text(
-                            _errorMessage!,
-                            style: AppTextStyles.meta.copyWith(
-                              color: c.error,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.fieldGap),
-                ],
-                AppTextField(
-                  label: 'Full name',
-                  controller: _nameController,
-                  autofillHints: const [AutofillHints.name],
-                  textInputAction: TextInputAction.next,
-                  validator: Validators.name,
-                ),
-                const SizedBox(height: AppSpacing.fieldGap),
-                AppTextField(
-                  label: 'Email',
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  autofillHints: const [AutofillHints.email],
-                  textInputAction: TextInputAction.next,
-                  validator: Validators.email,
-                ),
-                const SizedBox(height: AppSpacing.fieldGap),
-                AppTextField(
-                  label: 'Password',
-                  controller: _passwordController,
-                  obscureText: true,
-                  autofillHints: const [AutofillHints.newPassword],
-                  textInputAction: TextInputAction.next,
-                  validator: Validators.password,
-                ),
-                const SizedBox(height: AppSpacing.fieldGap),
-                AppTextField(
-                  label: 'Confirm password',
-                  controller: _confirmController,
-                  obscureText: true,
-                  textInputAction: TextInputAction.done,
-                  validator: (v) =>
-                      Validators.confirmPassword(v, _passwordController.text),
-                ),
-                const SizedBox(height: AppSpacing.sectionGap),
-                PrimaryButton(
-                  label: 'Sign Up',
-                  onPressed: _submit,
-                  isLoading: auth.isLoading,
-                ),
-                const SizedBox(height: AppSpacing.md),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
+                    const SizedBox(height: AppSpacing.sm),
                     Text(
-                      'Already have an account?',
+                      'A few details and you are in',
+                      textAlign: TextAlign.center,
                       style: AppTextStyles.body.copyWith(
                         color: c.textSecondary,
                       ),
                     ),
-                    SecondaryButton(
-                      label: 'Log In',
-                      onPressed: () => Navigator.of(context).pop(),
+                    const SizedBox(height: AppSpacing.xl),
+                    TextFormField(
+                      controller: _nameController,
+                      textCapitalization: TextCapitalization.words,
+                      textInputAction: TextInputAction.next,
+                      autofillHints: const [AutofillHints.name],
+                      style: AppTextStyles.body.copyWith(color: c.textPrimary),
+                      decoration: const InputDecoration(
+                        labelText: 'Name',
+                        prefixIcon: Icon(Icons.person_outline, size: 20),
+                      ),
+                      validator: Validators.name,
+                    ),
+                    const SizedBox(height: AppSpacing.fieldGap),
+                    TextFormField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      textInputAction: TextInputAction.next,
+                      autofillHints: const [AutofillHints.email],
+                      style: AppTextStyles.body.copyWith(color: c.textPrimary),
+                      decoration: const InputDecoration(
+                        labelText: 'Email',
+                        hintText: 'you@example.com',
+                        prefixIcon: Icon(Icons.mail_outline, size: 20),
+                      ),
+                      validator: Validators.email,
+                    ),
+                    const SizedBox(height: AppSpacing.fieldGap),
+                    TextFormField(
+                      controller: _passwordController,
+                      obscureText: _obscurePassword,
+                      textInputAction: TextInputAction.next,
+                      autofillHints: const [AutofillHints.newPassword],
+                      style: AppTextStyles.body.copyWith(color: c.textPrimary),
+                      decoration: InputDecoration(
+                        labelText: 'Password',
+                        prefixIcon: const Icon(Icons.lock_outline, size: 20),
+                        suffixIcon: IconButton(
+                          onPressed: () => setState(
+                              () => _obscurePassword = !_obscurePassword),
+                          icon: Icon(
+                            _obscurePassword
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                      validator: Validators.password,
+                    ),
+                    const SizedBox(height: AppSpacing.fieldGap),
+                    TextFormField(
+                      controller: _confirmController,
+                      obscureText: _obscureConfirm,
+                      textInputAction: TextInputAction.done,
+                      onFieldSubmitted: (_) => _submit(),
+                      style: AppTextStyles.body.copyWith(color: c.textPrimary),
+                      decoration: InputDecoration(
+                        labelText: 'Confirm password',
+                        prefixIcon: const Icon(Icons.lock_outline, size: 20),
+                        suffixIcon: IconButton(
+                          onPressed: () => setState(
+                              () => _obscureConfirm = !_obscureConfirm),
+                          icon: Icon(
+                            _obscureConfirm
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                      validator: (value) => Validators.confirmPassword(
+                        value,
+                        _passwordController.text,
+                      ),
+                    ),
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeInOut,
+                      child: _authError == null
+                          ? const SizedBox(width: double.infinity)
+                          : Padding(
+                              padding:
+                                  const EdgeInsets.only(top: AppSpacing.md),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.error_outline,
+                                      size: 18, color: c.error),
+                                  const SizedBox(width: AppSpacing.sm),
+                                  Expanded(
+                                    child: Text(
+                                      _authError!,
+                                      style: AppTextStyles.meta.copyWith(
+                                        color: c.error,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    PrimaryButton(
+                      label: 'Sign Up',
+                      onPressed: _submit,
+                      isLoading: _submitting,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          'Already have an account?',
+                          style: AppTextStyles.body.copyWith(
+                            color: c.textSecondary,
+                          ),
+                        ),
+                        SecondaryButton(
+                          label: 'Login',
+                          onPressed: _goToLogin,
+                        ),
+                      ],
                     ),
                   ],
                 ),
-                const SizedBox(height: AppSpacing.lg),
-              ],
+              ),
             ),
           ),
         ),

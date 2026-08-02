@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
+import '../../core/routing/app_routes.dart';
 import '../../core/routing/page_transitions.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../providers/auth_provider.dart';
 import '../../widgets/app_mark.dart';
+import '../home/home_screen.dart';
 import '../welcome/welcome_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -40,10 +44,24 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _bootstrap() async {
-    await Future.delayed(_minDisplay);
+    final auth = context.read<AuthProvider>();
+    try {
+      await Future.wait([auth.restoreSession(), Future.delayed(_minDisplay)]);
+    } catch (_) {
+      // A failed restore just means no stored session.
+    }
     if (!mounted) return;
 
-    Navigator.of(context).pushReplacement(fadeRoute(const WelcomeScreen()));
+    final route = auth.isLoggedIn
+        ? fadeRoute(
+            const HomeScreen(),
+            settings: const RouteSettings(name: AppRoutes.home),
+          )
+        : fadeRoute(
+            const WelcomeScreen(),
+            settings: const RouteSettings(name: AppRoutes.welcome),
+          );
+    Navigator.of(context).pushReplacement(route);
   }
 
   @override

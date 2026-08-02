@@ -65,39 +65,49 @@ class ConfirmDialog extends StatelessWidget {
         AppSpacing.md,
         AppSpacing.md,
       ),
+      // A single Row action: AlertDialog lays actions out in an
+      // OverflowBar, which does not allow Expanded children directly.
       actions: [
-        Expanded(
-          child: SecondaryButton(
-            label: cancelLabel,
-            outlined: true,
-            onPressed: () => Navigator.of(context).pop(false),
-          ),
-        ),
-        const SizedBox(width: AppSpacing.sm2),
-        Expanded(
-          child: destructive
-              ? Material(
-                  color: c.error,
-                  borderRadius: BorderRadius.circular(AppSpacing.controlRadius),
-                  child: InkWell(
-                    onTap: () => Navigator.of(context).pop(true),
-                    borderRadius: BorderRadius.circular(
-                      AppSpacing.controlRadius,
-                    ),
-                    child: Container(
-                      constraints: const BoxConstraints(minHeight: 52),
-                      alignment: Alignment.center,
-                      child: Text(
-                        confirmLabel,
-                        style: AppTextStyles.button.copyWith(color: c.onAccent),
+        Row(
+          children: [
+            Expanded(
+              child: SecondaryButton(
+                label: cancelLabel,
+                outlined: true,
+                onPressed: () => Navigator.of(context).pop(false),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm2),
+            Expanded(
+              child: destructive
+                  ? Material(
+                      color: c.error,
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.controlRadius,
                       ),
+                      child: InkWell(
+                        onTap: () => Navigator.of(context).pop(true),
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.controlRadius,
+                        ),
+                        child: Container(
+                          constraints: const BoxConstraints(minHeight: 52),
+                          alignment: Alignment.center,
+                          child: Text(
+                            confirmLabel,
+                            style: AppTextStyles.button.copyWith(
+                              color: c.onAccent,
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  : PrimaryButton(
+                      label: confirmLabel,
+                      onPressed: () => Navigator.of(context).pop(true),
                     ),
-                  ),
-                )
-              : PrimaryButton(
-                  label: confirmLabel,
-                  onPressed: () => Navigator.of(context).pop(true),
-                ),
+            ),
+          ],
         ),
       ],
     );

@@ -6,6 +6,7 @@ import 'data/repositories/auth_repository.dart';
 import 'data/repositories/mock_auth_repository.dart';
 import 'data/repositories/task_repository.dart';
 import 'providers/auth_provider.dart';
+import 'providers/notification_provider.dart';
 import 'providers/task_provider.dart';
 import 'providers/theme_provider.dart';
 
@@ -27,6 +28,11 @@ class TaskayaBootstrap extends StatelessWidget {
         ),
         ChangeNotifierProvider(
           create: (context) => TaskProvider(context.read<TaskRepository>()),
+        ),
+        ChangeNotifierProxyProvider<TaskProvider, NotificationProvider>(
+          create: (_) => NotificationProvider()..load(),
+          update: (_, tasks, notifications) =>
+              notifications!..updateTasks(tasks.pending),
         ),
         ChangeNotifierProvider(create: (_) => ThemeProvider()..load()),
       ],
