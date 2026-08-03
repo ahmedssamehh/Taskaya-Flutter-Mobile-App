@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ replaces the windowBackground splash with the platform
+     SplashScreen API, so the brand colours have to be declared here too. -->
+<resources>
+    <style name="LaunchTheme" parent="@android:style/Theme.DeviceDefault.DayNight">
+        <item name="android:windowSplashScreenBackground">@color/taskaya_splash_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+
+    <style name="NormalTheme" parent="@android:style/Theme.DeviceDefault.DayNight">
+        <item name="android:windowBackground">?android:colorBackground</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>

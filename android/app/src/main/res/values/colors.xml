@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Taskaya brand: the mark is always white on black, in both themes. -->
+    <color name="ic_launcher_background">#000000</color>
+    <color name="taskaya_splash_background">#000000</color>
+</resources>
