@@ -9,5 +9,6 @@ abstract class AuthRepository {
   Future<AppUser?> restoreSession();
   Future<AppUser> login(String email, String password);
   Future<AppUser> signup(String name, String email, String password);
+  Future<AppUser> loginWithGoogle();
   Future<void> logout();
 }

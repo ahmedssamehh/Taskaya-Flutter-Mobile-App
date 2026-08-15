@@ -6,10 +6,13 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/utils/date_formatter.dart';
 import '../../core/utils/validators.dart';
+import '../../data/models/reminder_offset.dart';
 import '../../data/models/task.dart';
+import '../../data/models/task_category.dart';
 import '../../data/models/task_priority.dart';
 import '../../providers/task_provider.dart';
 import '../../widgets/app_text_field.dart';
+import '../../widgets/app_toast.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/monochrome_picker_theme.dart';
 import '../../widgets/primary_button.dart';
@@ -30,8 +33,11 @@ class _AddEditTaskScreenState extends State<AddEditTaskScreen> {
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
   late TaskPriority _priority;
+  late TaskCategory _category;
+  late ReminderOffset _reminder;
   DateTime? _dueDate;
   bool _dirty = false;
+  bool _submitting = false;
 
   @override
   void initState() {
@@ -42,6 +48,8 @@ class _AddEditTaskScreenState extends State<AddEditTaskScreen> {
       text: task?.description ?? '',
     );
     _priority = task?.priority ?? TaskPriority.medium;
+    _category = task?.category ?? TaskCategory.personal;
+    _reminder = task?.reminderOffset ?? ReminderOffset.atDueTime;
     _dueDate = task?.dueDate;
   }
 
@@ -101,44 +109,81 @@ class _AddEditTaskScreenState extends State<AddEditTaskScreen> {
     _markDirty();
   }
 
-  void _save() {
+  Future<void> _save() async {
+    if (_submitting) return;
     final valid = _formKey.currentState?.validate() ?? false;
     if (!valid) return;
 
+    setState(() => _submitting = true);
     final provider = context.read<TaskProvider>();
     final title = _titleController.text.trim();
     final description = _descriptionController.text.trim();
 
-    if (widget.isEditMode) {
-      provider.updateTask(
-        widget.task!.copyWith(
-          title: title,
-          description: description,
-          priority: _priority,
-          dueDate: _dueDate,
-          clearDueDate: _dueDate == null,
-        ),
-      );
-    } else {
-      provider.addTask(
-        title: title,
-        description: description,
-        priority: _priority,
-        dueDate: _dueDate,
-      );
+    final error = widget.isEditMode
+        ? await provider.updateTask(
+            widget.task!.copyWith(
+              title: title,
+              description: description,
+              priority: _priority,
+              category: _category,
+              dueDate: _dueDate,
+              clearDueDate: _dueDate == null,
+              reminderOffset: _reminder,
+            ),
+          )
+        : await provider.addTask(
+            title: title,
+            description: description,
+            priority: _priority,
+            category: _category,
+            dueDate: _dueDate,
+            reminderOffset: _reminder,
+          );
+
+    if (!mounted) return;
+    if (error != null) {
+      setState(() => _submitting = false);
+      AppToast.error(context, error);
+      return;
     }
+    final wasEdit = widget.isEditMode;
     Navigator.of(context).pop();
+    AppToast.success(
+      context,
+      wasEdit ? 'Task updated' : 'Task "${_shortTitle(title)}" created',
+    );
   }
 
+  /// Keeps toast copy short when a task has a long title.
+  String _shortTitle(String title) =>
+      title.length <= 24 ? title : '${title.substring(0, 24)}…';
+
   Future<void> _delete() async {
+    if (_submitting) return;
     final confirmed = await showConfirmDialog(
       context,
       title: 'Delete task?',
       message: "This can't be undone.",
     );
     if (!confirmed || !mounted) return;
-    context.read<TaskProvider>().deleteTask(widget.task!.id);
-    if (mounted) Navigator.of(context).pop();
+
+    setState(() => _submitting = true);
+    final provider = context.read<TaskProvider>();
+    final deleted = widget.task!;
+    final error = await provider.deleteTask(deleted.id);
+    if (!mounted) return;
+    if (error != null) {
+      setState(() => _submitting = false);
+      AppToast.error(context, error);
+      return;
+    }
+    Navigator.of(context).pop();
+    AppToast.show(
+      context,
+      message: 'Task deleted',
+      actionLabel: 'Undo',
+      onAction: () => provider.restoreTask(deleted),
+    );
   }
 
   Future<void> _close() async {
@@ -210,7 +255,7 @@ class _AddEditTaskScreenState extends State<AddEditTaskScreen> {
                     label: 'Title',
                     controller: _titleController,
                     autofocus: !widget.isEditMode,
-                    maxLength: 60,
+                    maxLength: Validators.maxTitleLength,
                     textInputAction: TextInputAction.next,
                     validator: Validators.requiredTitle,
                     trailingIcon: Icons.mic_none_outlined,
@@ -222,7 +267,9 @@ class _AddEditTaskScreenState extends State<AddEditTaskScreen> {
                     label: 'Description',
                     controller: _descriptionController,
                     maxLines: 4,
+                    maxLength: Validators.maxDescriptionLength,
                     textInputAction: TextInputAction.newline,
+                    validator: Validators.description,
                   ),
                   const SizedBox(height: AppSpacing.sectionGap),
                   Text(
@@ -249,6 +296,28 @@ class _AddEditTaskScreenState extends State<AddEditTaskScreen> {
                             },
                           ),
                         ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: AppSpacing.sectionGap),
+                  Text(
+                    'Category',
+                    style: AppTextStyles.label.copyWith(color: c.textPrimary),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.sm,
+                    children: TaskCategory.values.map((cat) {
+                      final selected = cat == _category;
+                      return _ChoiceChip(
+                        label: cat.label,
+                        icon: cat.icon,
+                        selected: selected,
+                        onTap: () {
+                          setState(() => _category = cat);
+                          _markDirty();
+                        },
                       );
                     }).toList(),
                   ),
@@ -294,10 +363,60 @@ class _AddEditTaskScreenState extends State<AddEditTaskScreen> {
                         ),
                     ],
                   ),
+                  const SizedBox(height: AppSpacing.sectionGap),
+                  Row(
+                    children: [
+                      Text(
+                        'Remind me',
+                        style: AppTextStyles.label.copyWith(
+                          color: _dueDate == null
+                              ? c.textTertiary
+                              : c.textPrimary,
+                        ),
+                      ),
+                      if (_dueDate == null) ...[
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Text(
+                            '— set a due date first',
+                            style: AppTextStyles.meta.copyWith(
+                              color: c.textTertiary,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Opacity(
+                    opacity: _dueDate == null ? 0.45 : 1,
+                    child: IgnorePointer(
+                      ignoring: _dueDate == null,
+                      child: Wrap(
+                        spacing: AppSpacing.sm,
+                        runSpacing: AppSpacing.sm,
+                        children: ReminderOffset.values.map((r) {
+                          return _ChoiceChip(
+                            label: r.label,
+                            icon: r == ReminderOffset.none
+                                ? Icons.notifications_off_outlined
+                                : Icons.notifications_active_outlined,
+                            selected: r == _reminder,
+                            onTap: () {
+                              setState(() => _reminder = r);
+                              _markDirty();
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: AppSpacing.xl),
                   PrimaryButton(
                     label: widget.isEditMode ? 'Save Changes' : 'Save Task',
-                    onPressed: _save,
+                    onPressed: _submitting ? null : _save,
+                    isLoading: _submitting,
                   ),
                   if (widget.isEditMode) ...[
                     const SizedBox(height: AppSpacing.lg),
@@ -305,7 +424,7 @@ class _AddEditTaskScreenState extends State<AddEditTaskScreen> {
                     const SizedBox(height: AppSpacing.sm),
                     Center(
                       child: TextButton(
-                        onPressed: _delete,
+                        onPressed: _submitting ? null : _delete,
                         child: Text(
                           'Delete task',
                           style: AppTextStyles.button.copyWith(color: c.error),
@@ -358,6 +477,64 @@ class _PriorityChip extends StatelessWidget {
               style: AppTextStyles.label.copyWith(
                 color: selected ? c.onAccent : c.textPrimary,
               ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Shared pill used by both the category and reminder pickers.
+class _ChoiceChip extends StatelessWidget {
+  const _ChoiceChip({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: Material(
+        color: selected ? c.accent : Colors.transparent,
+        borderRadius: BorderRadius.circular(AppSpacing.controlRadius),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppSpacing.controlRadius),
+          child: Container(
+            height: 40,
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm2),
+            decoration: BoxDecoration(
+              border: Border.all(color: selected ? c.accent : c.border),
+              borderRadius: BorderRadius.circular(AppSpacing.controlRadius),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 15,
+                  color: selected ? c.onAccent : c.textSecondary,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: AppTextStyles.label.copyWith(
+                    color: selected ? c.onAccent : c.textPrimary,
+                  ),
+                ),
+              ],
             ),
           ),
         ),

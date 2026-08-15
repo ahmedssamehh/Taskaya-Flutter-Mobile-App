@@ -9,6 +9,7 @@ import '../../core/theme/app_text_styles.dart';
 import '../../core/utils/validators.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/app_mark.dart';
+import '../../widgets/google_signin_button.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/secondary_button.dart';
 import '../home/home_screen.dart';
@@ -29,6 +30,7 @@ class _SignupScreenState extends State<SignupScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
   bool _submitting = false;
+  bool _googleSubmitting = false;
   String? _authError;
 
   @override
@@ -41,6 +43,7 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   Future<void> _submit() async {
+    if (_submitting) return;
     setState(() => _authError = null);
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
@@ -52,6 +55,29 @@ class _SignupScreenState extends State<SignupScreen> {
         );
     if (!mounted) return;
     setState(() => _submitting = false);
+
+    if (error != null) {
+      setState(() => _authError = error);
+      return;
+    }
+    Navigator.of(context).pushAndRemoveUntil(
+      fadeRoute(
+        const HomeScreen(),
+        settings: const RouteSettings(name: AppRoutes.home),
+      ),
+      (route) => false,
+    );
+  }
+
+  Future<void> _submitGoogle() async {
+    if (_googleSubmitting || _submitting) return;
+    setState(() {
+      _authError = null;
+      _googleSubmitting = true;
+    });
+    final error = await context.read<AuthProvider>().loginWithGoogle();
+    if (!mounted) return;
+    setState(() => _googleSubmitting = false);
 
     if (error != null) {
       setState(() => _authError = error);
@@ -85,6 +111,7 @@ class _SignupScreenState extends State<SignupScreen> {
               constraints: const BoxConstraints(maxWidth: 420),
               child: Form(
                 key: _formKey,
+                autovalidateMode: AutovalidateMode.onUserInteraction,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -111,9 +138,11 @@ class _SignupScreenState extends State<SignupScreen> {
                       textCapitalization: TextCapitalization.words,
                       textInputAction: TextInputAction.next,
                       autofillHints: const [AutofillHints.name],
+                      maxLength: Validators.maxNameLength,
                       style: AppTextStyles.body.copyWith(color: c.textPrimary),
                       decoration: const InputDecoration(
                         labelText: 'Name',
+                        counterText: '',
                         prefixIcon: Icon(Icons.person_outline, size: 20),
                       ),
                       validator: Validators.name,
@@ -153,7 +182,17 @@ class _SignupScreenState extends State<SignupScreen> {
                           ),
                         ),
                       ),
-                      validator: Validators.password,
+                      validator: Validators.signupPassword,
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6, left: 4),
+                      child: Text(
+                        'At least 8 characters, with a letter and a number',
+                        style: AppTextStyles.meta.copyWith(
+                          color: c.textTertiary,
+                          fontSize: 12,
+                        ),
+                      ),
                     ),
                     const SizedBox(height: AppSpacing.fieldGap),
                     TextFormField(
@@ -212,6 +251,29 @@ class _SignupScreenState extends State<SignupScreen> {
                       label: 'Sign Up',
                       onPressed: _submit,
                       isLoading: _submitting,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    Row(
+                      children: [
+                        Expanded(child: Divider(color: c.border)),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.sm,
+                          ),
+                          child: Text(
+                            'or',
+                            style: AppTextStyles.meta.copyWith(
+                              color: c.textSecondary,
+                            ),
+                          ),
+                        ),
+                        Expanded(child: Divider(color: c.border)),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    GoogleSignInButton(
+                      onPressed: _submitGoogle,
+                      isLoading: _googleSubmitting,
                     ),
                     const SizedBox(height: AppSpacing.md),
                     Wrap(

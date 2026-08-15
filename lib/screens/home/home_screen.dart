@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/motion/app_motion.dart';
 import '../../core/routing/app_routes.dart';
 import '../../core/routing/page_transitions.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../data/models/task.dart';
+import '../../data/models/task_category.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../widgets/app_mark.dart';
+import '../../widgets/app_toast.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/notification_bell.dart';
@@ -17,7 +20,9 @@ import '../../widgets/section_label.dart';
 import '../../widgets/staggered_fade_in.dart';
 import '../../widgets/task_card.dart';
 import '../../widgets/theme_toggle.dart';
+import '../../services/local_notification_service.dart';
 import '../add_edit/add_edit_task_screen.dart';
+import '../focus/focus_setup_screen.dart';
 import '../login/login_screen.dart';
 import '../welcome/welcome_screen.dart';
 
@@ -29,10 +34,30 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    LocalNotificationService.instance.requestPermissions();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   Future<void> _openAddEdit({Task? task}) async {
     await Navigator.of(
       context,
     ).push(slideUpRoute(AddEditTaskScreen(task: task)));
+  }
+
+  Future<void> _openFocus({Task? task}) async {
+    await Navigator.of(
+      context,
+    ).push(slideUpRoute(FocusSetupScreen(initialTask: task)));
   }
 
   Future<void> _confirmDelete(Task task) async {
@@ -47,20 +72,33 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _deleteWithUndo(Task task) {
     final provider = context.read<TaskProvider>();
-    final allBefore = [...provider.pending, ...provider.completed];
-    final index = allBefore.indexWhere((t) => t.id == task.id);
-    provider.deleteTask(task.id);
-
-    ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Task deleted'),
+    provider.deleteTask(task.id).then((error) {
+      if (!mounted) return;
+      if (error != null) {
+        AppToast.error(context, error);
+        return;
+      }
+      AppToast.show(
+        context,
+        message: 'Task deleted',
         duration: const Duration(seconds: 4),
-        action: SnackBarAction(
-          label: 'Undo',
-          onPressed: () => provider.restoreTask(task, index < 0 ? 0 : index),
-        ),
-      ),
+        actionLabel: 'Undo',
+        onAction: () => provider.restoreTask(task),
+      );
+    });
+  }
+
+  Future<void> _toggleComplete(Task task) async {
+    final wasCompleted = task.isCompleted;
+    final error = await context.read<TaskProvider>().toggleComplete(task.id);
+    if (!mounted) return;
+    if (error != null) {
+      AppToast.error(context, error);
+      return;
+    }
+    AppToast.success(
+      context,
+      wasCompleted ? 'Moved back to pending' : 'Task completed',
     );
   }
 
@@ -87,6 +125,18 @@ class _HomeScreenState extends State<HomeScreen> {
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
+            if (!task.isCompleted)
+              ListTile(
+                leading: Icon(Icons.timer_outlined, color: c.textPrimary),
+                title: Text(
+                  'Focus on this task',
+                  style: AppTextStyles.body.copyWith(color: c.textPrimary),
+                ),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _openFocus(task: task);
+                },
+              ),
             ListTile(
               leading: Icon(Icons.edit_outlined, color: c.textPrimary),
               title: Text(
@@ -153,23 +203,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _showVoiceComingSoon() {
-    final c = context.colors;
-    ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Icon(Icons.mic_outlined, color: c.onAccent, size: 18),
-            const SizedBox(width: AppSpacing.sm),
-            const Expanded(child: Text('Voice input is coming soon')),
-          ],
-        ),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
@@ -188,63 +221,25 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: c.background,
         body: SafeArea(
           bottom: false,
-          child: tasks.isEmpty
-              ? Column(
-                  children: [
-                    _Header(
-                      pendingCount: tasks.pendingCount,
-                      completedCount: tasks.completedCount,
-                      onInfo: _openAbout,
-                      onLogout: _logout,
-                    ),
-                    Expanded(
-                      child: EmptyState(onAddTask: () => _openAddEdit()),
-                    ),
-                  ],
-                )
-              : CustomScrollView(
-                  slivers: [
-                    SliverToBoxAdapter(
-                      child: _Header(
-                        pendingCount: tasks.pendingCount,
-                        completedCount: tasks.completedCount,
-                        onInfo: _openAbout,
-                        onLogout: _logout,
-                      ),
-                    ),
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.screenPaddingH,
-                        AppSpacing.sm,
-                        AppSpacing.screenPaddingH,
-                        96,
-                      ),
-                      sliver: SliverList(
-                        delegate: SliverChildListDelegate(
-                          _buildSections(tasks),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+          child: _buildBody(context, tasks),
         ),
         floatingActionButton: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Semantics(
-              label: 'Add task by voice, coming soon',
+              label: 'Start a focus session',
               button: true,
               child: SizedBox(
-                width: 44,
-                height: 44,
+                width: 48,
+                height: 48,
                 child: FloatingActionButton(
-                  heroTag: 'voiceFab',
-                  onPressed: _showVoiceComingSoon,
+                  heroTag: 'focusFab',
+                  onPressed: () => _openFocus(),
                   backgroundColor: c.surface,
                   foregroundColor: c.textPrimary,
                   elevation: 0,
                   shape: CircleBorder(side: BorderSide(color: c.border)),
-                  child: const Icon(Icons.mic_none_outlined, size: 18),
+                  child: const Icon(Icons.timer_outlined, size: 20),
                 ),
               ),
             ),
@@ -267,6 +262,60 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       ),
+    );
+  }
+
+  Widget _buildBody(BuildContext context, TaskProvider tasks) {
+    // Genuinely no tasks at all yet (and not loading/erroring) — the big
+    // "add your first task" empty state, same as Phase 1.
+    if (tasks.isEmpty && !tasks.isLoading && tasks.error == null) {
+      return Column(
+        children: [
+          _Header(tasks: tasks, onInfo: _openAbout, onLogout: _logout),
+          _SearchAndFilterBar(searchController: _searchController),
+          Expanded(child: EmptyState(onAddTask: () => _openAddEdit())),
+        ],
+      );
+    }
+
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(
+          child: _Header(tasks: tasks, onInfo: _openAbout, onLogout: _logout),
+        ),
+        SliverToBoxAdapter(
+          child: _SearchAndFilterBar(searchController: _searchController),
+        ),
+        if (tasks.error != null)
+          SliverToBoxAdapter(child: _ErrorBanner(message: tasks.error!)),
+        if (tasks.isLoading && tasks.isEmpty)
+          const SliverFillRemaining(
+            hasScrollBody: false,
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (tasks.hasNoResultsForFilter)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: _NoResultsState(
+              onClear: () {
+                tasks.clearFilters();
+                _searchController.clear();
+              },
+            ),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.screenPaddingH,
+              AppSpacing.sm,
+              AppSpacing.screenPaddingH,
+              96,
+            ),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate(_buildSections(tasks)),
+            ),
+          ),
+      ],
     );
   }
 
@@ -328,7 +377,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       child: TaskCard(
         task: task,
-        onToggle: () => context.read<TaskProvider>().toggleComplete(task.id),
+        onToggle: () => _toggleComplete(task),
         onTap: () => _openAddEdit(task: task),
         onLongPress: () => _showTaskActions(task),
       ),
@@ -338,14 +387,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
 class _Header extends StatelessWidget {
   const _Header({
-    required this.pendingCount,
-    required this.completedCount,
+    required this.tasks,
     required this.onInfo,
     required this.onLogout,
   });
 
-  final int pendingCount;
-  final int completedCount;
+  final TaskProvider tasks;
   final VoidCallback onInfo;
   final VoidCallback onLogout;
 
@@ -381,7 +428,7 @@ class _Header extends StatelessWidget {
                 ),
                 const SizedBox(height: 5),
                 Text(
-                  '$pendingCount pending · $completedCount done',
+                  '${tasks.pendingCount} pending · ${tasks.completedCount} done',
                   style: AppTextStyles.meta.copyWith(
                     color: c.textSecondary,
                     fontSize: 13,
@@ -409,6 +456,261 @@ class _Header extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SearchAndFilterBar extends StatelessWidget {
+  const _SearchAndFilterBar({required this.searchController});
+
+  final TextEditingController searchController;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final tasks = context.watch<TaskProvider>();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.screenPaddingH,
+        AppSpacing.sm2,
+        AppSpacing.screenPaddingH,
+        0,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Semantics(
+            textField: true,
+            label: 'Search tasks',
+            child: TextField(
+              controller: searchController,
+              onChanged: tasks.setQuery,
+              textInputAction: TextInputAction.search,
+              style: AppTextStyles.body.copyWith(color: c.textPrimary),
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: 'Search tasks',
+                prefixIcon: Icon(
+                  Icons.search,
+                  size: 18,
+                  color: c.textSecondary,
+                ),
+                suffixIcon: tasks.query.isEmpty
+                    ? null
+                    : Semantics(
+                        label: 'Clear search',
+                        button: true,
+                        child: IconButton(
+                          icon: Icon(Icons.close, size: 16, color: c.textSecondary),
+                          onPressed: () {
+                            searchController.clear();
+                            tasks.clearQuery();
+                          },
+                        ),
+                      ),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          SizedBox(
+            height: 34,
+            child: Row(
+              children: TaskStatusFilter.values.map((filter) {
+                final selected = tasks.statusFilter == filter;
+                return Padding(
+                  padding: const EdgeInsets.only(right: AppSpacing.sm),
+                  child: _FilterChip(
+                    label: switch (filter) {
+                      TaskStatusFilter.all => 'All',
+                      TaskStatusFilter.pending => 'Pending',
+                      TaskStatusFilter.completed => 'Completed',
+                    },
+                    selected: selected,
+                    onTap: () => tasks.setStatusFilter(filter),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          // Category filters scroll horizontally so all four fit on narrow
+          // screens alongside the "All" reset chip.
+          SizedBox(
+            height: 34,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: EdgeInsets.zero,
+              children: [
+                _FilterChip(
+                  label: 'All categories',
+                  selected: tasks.categoryFilter == null,
+                  onTap: () => tasks.setCategoryFilter(null),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                ...TaskCategory.values.map((cat) {
+                  final count = tasks.countForCategory(cat);
+                  return Padding(
+                    padding: const EdgeInsets.only(right: AppSpacing.sm),
+                    child: _FilterChip(
+                      label: '${cat.label} ($count)',
+                      icon: cat.icon,
+                      selected: tasks.categoryFilter == cat,
+                      onTap: () => tasks.setCategoryFilter(
+                        tasks.categoryFilter == cat ? null : cat,
+                      ),
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+        ],
+      ),
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  const _FilterChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.icon,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final fg = selected ? c.onAccent : c.textPrimary;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      child: Material(
+        color: selected ? c.accent : Colors.transparent,
+        borderRadius: BorderRadius.circular(AppSpacing.controlRadius),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppSpacing.controlRadius),
+          child: AnimatedContainer(
+            duration: AppMotion.d(context, AppMotion.fast),
+            curve: AppMotion.enter,
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm2),
+            decoration: BoxDecoration(
+              border: Border.all(color: selected ? c.accent : c.border),
+              borderRadius: BorderRadius.circular(AppSpacing.controlRadius),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, size: 14, color: fg),
+                  const SizedBox(width: 5),
+                ],
+                Text(
+                  label,
+                  style: AppTextStyles.label.copyWith(
+                    fontSize: 13,
+                    color: fg,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NoResultsState extends StatelessWidget {
+  const _NoResultsState({required this.onClear});
+
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.search_off, size: 44, color: c.textTertiary),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'No matching tasks',
+              style: AppTextStyles.taskTitle.copyWith(color: c.textPrimary),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Try a different search or filter.',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.meta.copyWith(color: c.textSecondary),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextButton(
+              onPressed: onClear,
+              child: const Text('Clear search & filters'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.screenPaddingH,
+        AppSpacing.sm,
+        AppSpacing.screenPaddingH,
+        0,
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.sm2),
+        decoration: BoxDecoration(
+          border: Border.all(color: c.error),
+          borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.wifi_off, size: 18, color: c.error),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                message,
+                style: AppTextStyles.meta.copyWith(color: c.error),
+              ),
+            ),
+            Semantics(
+              label: 'Dismiss error',
+              button: true,
+              child: IconButton(
+                icon: Icon(Icons.close, size: 16, color: c.error),
+                onPressed: () => context.read<TaskProvider>().clearError(),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

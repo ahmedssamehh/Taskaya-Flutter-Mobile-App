@@ -9,6 +9,7 @@ import '../../core/theme/app_text_styles.dart';
 import '../../core/utils/validators.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/app_mark.dart';
+import '../../widgets/google_signin_button.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/secondary_button.dart';
 import '../../widgets/theme_toggle.dart';
@@ -28,6 +29,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _submitting = false;
+  bool _googleSubmitting = false;
   String? _authError;
 
   @override
@@ -38,6 +40,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _submit() async {
+    if (_submitting) return;
     setState(() => _authError = null);
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
@@ -48,6 +51,29 @@ class _LoginScreenState extends State<LoginScreen> {
         );
     if (!mounted) return;
     setState(() => _submitting = false);
+
+    if (error != null) {
+      setState(() => _authError = error);
+      return;
+    }
+    Navigator.of(context).pushAndRemoveUntil(
+      fadeRoute(
+        const HomeScreen(),
+        settings: const RouteSettings(name: AppRoutes.home),
+      ),
+      (route) => false,
+    );
+  }
+
+  Future<void> _submitGoogle() async {
+    if (_googleSubmitting || _submitting) return;
+    setState(() {
+      _authError = null;
+      _googleSubmitting = true;
+    });
+    final error = await context.read<AuthProvider>().loginWithGoogle();
+    if (!mounted) return;
+    setState(() => _googleSubmitting = false);
 
     if (error != null) {
       setState(() => _authError = error);
@@ -194,6 +220,29 @@ class _LoginScreenState extends State<LoginScreen> {
                           isLoading: _submitting,
                         ),
                         const SizedBox(height: AppSpacing.md),
+                        Row(
+                          children: [
+                            Expanded(child: Divider(color: c.border)),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.sm,
+                              ),
+                              child: Text(
+                                'or',
+                                style: AppTextStyles.meta.copyWith(
+                                  color: c.textSecondary,
+                                ),
+                              ),
+                            ),
+                            Expanded(child: Divider(color: c.border)),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        GoogleSignInButton(
+                          onPressed: _submitGoogle,
+                          isLoading: _googleSubmitting,
+                        ),
+                        const SizedBox(height: AppSpacing.md),
                         Wrap(
                           alignment: WrapAlignment.center,
                           crossAxisAlignment: WrapCrossAlignment.center,
@@ -209,16 +258,6 @@ class _LoginScreenState extends State<LoginScreen> {
                               onPressed: _goToSignup,
                             ),
                           ],
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        // Seeded mock account (until real auth in Phase 2).
-                        Text(
-                          'Demo account: demo@taskaya.app · demo123',
-                          textAlign: TextAlign.center,
-                          style: AppTextStyles.meta.copyWith(
-                            color: c.textTertiary,
-                            fontSize: 12,
-                          ),
                         ),
                       ],
                     ),

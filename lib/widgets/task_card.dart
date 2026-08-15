@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/motion/app_motion.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_spacing.dart';
 import '../core/theme/app_text_styles.dart';
@@ -7,6 +8,8 @@ import '../core/utils/date_formatter.dart';
 import '../data/models/task.dart';
 import '../data/models/task_priority.dart';
 import 'animated_checkbox.dart';
+
+
 
 class TaskCard extends StatelessWidget {
   const TaskCard({
@@ -42,14 +45,39 @@ class TaskCard extends StatelessWidget {
     return date;
   }
 
+  /// Pending task whose due time has already passed.
+  bool get _isOverdue {
+    final due = task.dueDate;
+    if (task.isCompleted || due == null) return false;
+    return due.isBefore(DateTime.now());
+  }
+
+  /// Pending task due within the next hour — worth a nudge, but not alarming.
+  bool get _isDueSoon {
+    final due = task.dueDate;
+    if (task.isCompleted || due == null || _isOverdue) return false;
+    return due.difference(DateTime.now()) <= const Duration(hours: 1);
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final meta = _metaLabel;
+    final overdue = _isOverdue;
+    final dueSoon = _isDueSoon;
+    final accentEdge = overdue
+        ? c.error
+        : dueSoon
+        ? c.borderStrong
+        : c.border;
 
     return Semantics(
       label: task.title,
-      hint: task.isCompleted ? 'Completed task' : 'Pending task',
+      hint: task.isCompleted
+          ? 'Completed task'
+          : overdue
+          ? 'Overdue task'
+          : 'Pending task',
       child: Material(
         color: c.surface,
         borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
@@ -57,11 +85,15 @@ class TaskCard extends StatelessWidget {
           onTap: onTap,
           onLongPress: onLongPress,
           borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-          child: Container(
+          child: AnimatedContainer(
+            duration: AppMotion.d(context, AppMotion.base),
+            curve: AppMotion.enter,
             decoration: BoxDecoration(
               border: Border.all(
-                color: c.border,
-                width: AppSpacing.borderHairline,
+                color: accentEdge,
+                width: (overdue || dueSoon)
+                    ? 1.4
+                    : AppSpacing.borderHairline,
               ),
               borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
             ),
@@ -105,21 +137,32 @@ class TaskCard extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
-                              Icons.calendar_today_outlined,
+                              overdue
+                                  ? Icons.error_outline
+                                  : dueSoon
+                                  ? Icons.schedule
+                                  : Icons.calendar_today_outlined,
                               size: 11,
-                              color: task.isCompleted
+                              color: overdue
+                                  ? c.error
+                                  : task.isCompleted
                                   ? c.textTertiary
                                   : c.textSecondary,
                             ),
                             const SizedBox(width: 4),
                             Flexible(
                               child: Text(
-                                meta,
+                                overdue ? 'Overdue · $meta' : meta,
                                 overflow: TextOverflow.ellipsis,
                                 style: AppTextStyles.meta.copyWith(
-                                  color: task.isCompleted
+                                  color: overdue
+                                      ? c.error
+                                      : task.isCompleted
                                       ? c.textTertiary
                                       : c.textSecondary,
+                                  fontWeight: overdue
+                                      ? FontWeight.w600
+                                      : null,
                                   fontFeatures: const [
                                     FontFeature.tabularFigures(),
                                   ],
@@ -129,6 +172,26 @@ class TaskCard extends StatelessWidget {
                           ],
                         ),
                       ],
+                    ),
+                  ),
+                ),
+                Semantics(
+                  label: '${task.category.label} category',
+                  child: Container(
+                    width: 26,
+                    height: 26,
+                    margin: const EdgeInsets.only(left: AppSpacing.sm),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: c.border),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      task.category.icon,
+                      size: 13,
+                      color: task.isCompleted
+                          ? c.textTertiary
+                          : c.textSecondary,
                     ),
                   ),
                 ),

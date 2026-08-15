@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "389218008252",
+    "project_id": "taskaya-1",
+    "storage_bucket": "taskaya-1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:389218008252:android:fad22089dfca4d9b0024b9",
+        "android_client_info": {
+          "package_name": "com.taskaya.taskaya"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "389218008252-n2a5snhe2tqi2uavqj4dqmmc22aa4bup.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.taskaya.taskaya",
+            "certificate_hash": "3289728cff075746e01ca45d0d90c2ecd7905f7d"
+          }
+        },
+        {
+          "client_id": "389218008252-icqtau8k0o8joh8r36t9dtau58i7k7k0.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBf0b7ApXkYiXOZLsKbzv329PmwfTZKYpo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "389218008252-icqtau8k0o8joh8r36t9dtau58i7k7k0.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "389218008252-vg6i0tlkpgmt8i59md4760feq1p5pr3l.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.taskaya.taskaya"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,3 +1,7 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+import 'reminder_offset.dart';
+import 'task_category.dart';
 import 'task_priority.dart';
 
 class Task {
@@ -7,7 +11,9 @@ class Task {
     this.description = '',
     this.isCompleted = false,
     this.priority = TaskPriority.medium,
+    this.category = TaskCategory.personal,
     this.dueDate,
+    this.reminderOffset = ReminderOffset.atDueTime,
     required this.createdAt,
     this.completedAt,
   });
@@ -17,7 +23,9 @@ class Task {
   final String description;
   final bool isCompleted;
   final TaskPriority priority;
+  final TaskCategory category;
   final DateTime? dueDate;
+  final ReminderOffset reminderOffset;
   final DateTime createdAt;
   final DateTime? completedAt;
 
@@ -26,8 +34,10 @@ class Task {
     String? description,
     bool? isCompleted,
     TaskPriority? priority,
+    TaskCategory? category,
     DateTime? dueDate,
     bool clearDueDate = false,
+    ReminderOffset? reminderOffset,
     DateTime? completedAt,
     bool clearCompletedAt = false,
   }) {
@@ -37,39 +47,51 @@ class Task {
       description: description ?? this.description,
       isCompleted: isCompleted ?? this.isCompleted,
       priority: priority ?? this.priority,
+      category: category ?? this.category,
       dueDate: clearDueDate ? null : (dueDate ?? this.dueDate),
+      reminderOffset: reminderOffset ?? this.reminderOffset,
       createdAt: createdAt,
       completedAt: clearCompletedAt ? null : (completedAt ?? this.completedAt),
     );
   }
 
-  Map<String, dynamic> toMap() {
+  /// Serializes for Cloud Firestore. Dates become [Timestamp]s; the doc
+  /// lives at `users/{uid}/tasks/{id}`, so no owner id is stored in the map.
+  Map<String, dynamic> toFirestoreMap() {
     return {
-      'id': id,
       'title': title,
       'description': description,
       'isCompleted': isCompleted,
       'priority': priority.name,
-      'dueDate': dueDate?.toIso8601String(),
-      'createdAt': createdAt.toIso8601String(),
-      'completedAt': completedAt?.toIso8601String(),
+      'category': category.name,
+      'dueDate': dueDate == null ? null : Timestamp.fromDate(dueDate!),
+      'reminderOffset': reminderOffset.name,
+      'createdAt': Timestamp.fromDate(createdAt),
+      'completedAt': completedAt == null
+          ? null
+          : Timestamp.fromDate(completedAt!),
     };
   }
 
-  factory Task.fromMap(Map<String, dynamic> map) {
+  factory Task.fromFirestore(String id, Map<String, dynamic> data) {
+    DateTime? readDate(dynamic value) {
+      if (value == null) return null;
+      if (value is Timestamp) return value.toDate();
+      if (value is String) return DateTime.tryParse(value);
+      return null;
+    }
+
     return Task(
-      id: map['id'] as String,
-      title: map['title'] as String,
-      description: map['description'] as String? ?? '',
-      isCompleted: map['isCompleted'] as bool? ?? false,
-      priority: TaskPriority.fromName(map['priority'] as String? ?? 'medium'),
-      dueDate: map['dueDate'] != null
-          ? DateTime.parse(map['dueDate'] as String)
-          : null,
-      createdAt: DateTime.parse(map['createdAt'] as String),
-      completedAt: map['completedAt'] != null
-          ? DateTime.parse(map['completedAt'] as String)
-          : null,
+      id: id,
+      title: data['title'] as String? ?? '',
+      description: data['description'] as String? ?? '',
+      isCompleted: data['isCompleted'] as bool? ?? false,
+      priority: TaskPriority.fromName(data['priority'] as String? ?? 'medium'),
+      category: TaskCategory.fromName(data['category'] as String?),
+      dueDate: readDate(data['dueDate']),
+      reminderOffset: ReminderOffset.fromName(data['reminderOffset'] as String?),
+      createdAt: readDate(data['createdAt']) ?? DateTime.now(),
+      completedAt: readDate(data['completedAt']),
     );
   }
 }
