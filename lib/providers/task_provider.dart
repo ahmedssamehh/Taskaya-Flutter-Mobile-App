@@ -20,6 +20,7 @@ class TaskProvider extends ChangeNotifier {
     _isLoading = true;
     _subscription = _repository.watchAll().listen(
       (tasks) {
+        if (_disposed) return;
         _tasks = tasks;
         _isLoading = false;
         _error = null;
@@ -33,10 +34,20 @@ class TaskProvider extends ChangeNotifier {
         notifyListeners();
       },
       onError: (Object error) {
+        if (_disposed) return;
         _isLoading = false;
-        _error = error is TaskRepositoryException
-            ? error.message
-            : 'Something went wrong loading your tasks.';
+        // Signing out revokes access before this listener is torn down, so
+        // Firestore emits one permission error on the way out. That's the
+        // teardown, not a real failure — surfacing it would flash an error
+        // banner over the login screen.
+        if (error is TaskRepositoryException && error.isPermissionDenied) {
+          _tasks = const [];
+          _error = null;
+        } else {
+          _error = error is TaskRepositoryException
+              ? error.message
+              : 'Something went wrong loading your tasks.';
+        }
         notifyListeners();
       },
     );
@@ -55,6 +66,11 @@ class TaskProvider extends ChangeNotifier {
   bool _isSaving = false;
   bool _isDeleting = false;
   bool _didInitialNotificationSync = false;
+
+  /// Set in [dispose]. The Firestore stream can emit one more event while the
+  /// provider is being swapped out on sign-in/sign-out; notifying listeners
+  /// after disposal throws, so every callback checks this first.
+  bool _disposed = false;
 
   String _query = '';
   TaskStatusFilter _statusFilter = TaskStatusFilter.all;
@@ -273,6 +289,8 @@ class TaskProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    if (_disposed) return;
+    _disposed = true;
     _subscription.cancel();
     super.dispose();
   }

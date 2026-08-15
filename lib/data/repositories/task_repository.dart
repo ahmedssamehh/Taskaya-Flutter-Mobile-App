@@ -1,8 +1,14 @@
 import '../models/task.dart';
 
 class TaskRepositoryException implements Exception {
-  TaskRepositoryException(this.message);
+  TaskRepositoryException(this.message, {this.isPermissionDenied = false});
+
   final String message;
+
+  /// The backend rejected the caller's access. During sign-out this fires
+  /// once as the listener is torn down, so callers can tell it apart from a
+  /// genuine failure worth showing the user.
+  final bool isPermissionDenied;
 }
 
 /// Owner-scoped task storage. Implementations persist under a single

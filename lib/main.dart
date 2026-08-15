@@ -86,7 +86,9 @@ class TaskayaBootstrap extends StatelessWidget {
           update: (context, auth, previous) {
             final uid = auth.currentUser?.id;
             if (previous != null && previous.uid == uid) return previous;
-            previous?.dispose();
+            // Do NOT dispose `previous` here — ChangeNotifierProxyProvider
+            // already disposes the instance it replaces. Doing it manually
+            // too double-disposes and throws on the next frame.
             return TaskProvider(
               uid == null
                   ? _SignedOutTaskRepository()

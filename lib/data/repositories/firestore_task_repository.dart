@@ -27,7 +27,7 @@ class FirestoreTaskRepository implements TaskRepository {
           .map((doc) => Task.fromFirestore(doc.id, doc.data()))
           .toList();
     }).handleError((Object error) {
-      throw TaskRepositoryException(_mapError(error));
+      throw _toException(error);
     });
   }
 
@@ -36,7 +36,7 @@ class FirestoreTaskRepository implements TaskRepository {
     try {
       await _collection.doc(task.id).set(task.toFirestoreMap());
     } catch (error) {
-      throw TaskRepositoryException(_mapError(error));
+      throw _toException(error);
     }
   }
 
@@ -45,8 +45,16 @@ class FirestoreTaskRepository implements TaskRepository {
     try {
       await _collection.doc(id).delete();
     } catch (error) {
-      throw TaskRepositoryException(_mapError(error));
+      throw _toException(error);
     }
+  }
+
+  TaskRepositoryException _toException(Object error) {
+    return TaskRepositoryException(
+      _mapError(error),
+      isPermissionDenied:
+          error is FirebaseException && error.code == 'permission-denied',
+    );
   }
 
   String _mapError(Object error) {
