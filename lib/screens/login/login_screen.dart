@@ -27,7 +27,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _obscurePassword = true;
+  bool _obscurePassword = false;
   bool _submitting = false;
   bool _googleSubmitting = false;
   String? _authError;
