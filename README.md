@@ -222,7 +222,7 @@ See [`Project Docs/Phase2_Report.pdf`](Project%20Docs/Phase2_Report.pdf) for the
 | Team Leader | Ahmed Sameh |
 | Member | Mostafa |
 
-Built for the Mobile Application Development course — Phase 2 submission.
+Built for the Mobile Application Development course.
 
 ---
 
