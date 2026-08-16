@@ -24,10 +24,11 @@ class FocusSetupScreen extends StatefulWidget {
 }
 
 class _FocusSetupScreenState extends State<FocusSetupScreen> {
-  /// The 30-second entry is a deliberate short option for trying the
+  /// The 5-second "Test" entry is a deliberate short option for trying the
   /// end-of-session flow without waiting out a full sprint.
+  static const _testDuration = Duration(seconds: 5);
   static const _presets = <Duration>[
-    Duration(seconds: 30),
+    _testDuration,
     Duration(minutes: 15),
     Duration(minutes: 25),
     Duration(minutes: 45),
@@ -51,8 +52,11 @@ class _FocusSetupScreenState extends State<FocusSetupScreen> {
     );
   }
 
-  static String _durationLabel(Duration d) =>
-      d.inMinutes >= 1 ? '${d.inMinutes}-minute' : '${d.inSeconds}-second';
+  static String _durationLabel(Duration d) => d == _testDuration
+      ? 'Test'
+      : d.inMinutes >= 1
+      ? '${d.inMinutes}-minute'
+      : '${d.inSeconds}-second';
 
   @override
   Widget build(BuildContext context) {
@@ -204,10 +208,14 @@ class _DurationChip extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
+  /// The short debug preset gets its own "Test" label instead of a raw
+  /// second count, so it doesn't read like a real focus-length option.
+  bool get _isTest => duration == _FocusSetupScreenState._testDuration;
   bool get _isSeconds => duration.inMinutes < 1;
   String get _value =>
-      _isSeconds ? '${duration.inSeconds}' : '${duration.inMinutes}';
-  String get _unit => _isSeconds ? 'sec' : 'min';
+      _isTest ? 'Test' : (_isSeconds ? '${duration.inSeconds}' : '${duration.inMinutes}');
+  String get _unit =>
+      _isTest ? '${duration.inSeconds}s' : (_isSeconds ? 'sec' : 'min');
 
   @override
   Widget build(BuildContext context) {
@@ -215,7 +223,9 @@ class _DurationChip extends StatelessWidget {
     return Semantics(
       button: true,
       selected: selected,
-      label: _isSeconds
+      label: _isTest
+          ? 'Test, ${duration.inSeconds} seconds'
+          : _isSeconds
           ? '${duration.inSeconds} seconds'
           : '${duration.inMinutes} minutes',
       child: Material(
@@ -237,7 +247,7 @@ class _DurationChip extends StatelessWidget {
                 Text(
                   _value,
                   style: AppTextStyles.titleMedium.copyWith(
-                    fontSize: 17,
+                    fontSize: _isTest ? 14 : 17,
                     color: selected ? c.onAccent : c.textPrimary,
                   ),
                 ),
